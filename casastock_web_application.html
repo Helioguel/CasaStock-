@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="pt-PT" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CasaStock — Gestão Doméstica Inteligente</title>
+  
+  <!-- PWA Theme Meta -->
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CasaStock">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- HTML5-QRCode Scanner CDN -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              900: '#064e3b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .pulse-alert {
+      animation: pulseAlert 2s infinite;
+    }
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    #barcode-scanner-viewport video {
+      border-radius: 1rem;
+      object-fit: cover;
+      width: 100% !important;
+    }
+  </style>
+</head>
+<body class="h-full font-sans antialiased bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white">
+
+  <!-- SYSTEM TOAST NOTIFICATIONS -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- AUTH MODAL / OVERLAY -->
+  <div id="auth-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto hidden">
+    <div class="glass-card w-full max-w-md rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl relative">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3 text-emerald-400 text-2xl font-bold">
+          <i class="fas fa-boxes-stacked"></i>
+        </div>
+        <h2 class="text-2xl font-black text-white tracking-tight">CasaStock</h2>
+        <p id="auth-subtitle" class="text-slate-400 text-sm mt-1">Inicie sessão na sua conta ou crie um novo agregado familiar.</p>
+      </div>
+
+      <!-- Auth Tabs -->
+      <div class="flex bg-slate-900/80 p-1 rounded-xl mb-6 border border-slate-800">
+        <button id="tab-login-btn" onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition text-white bg-slate-800 shadow">Entrar</button>
+        <button id="tab-signup-btn" onclick="switchAuthTab('signup')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition text-slate-400 hover:text-white">Criar Conta</button>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <form id="form-login" onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Email</label>
+          <input type="email" id="login-email" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="exemplo@email.com">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Palavra-passe</label>
+          <input type="password" id="login-password" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="••••••••">
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-white rounded-xl shadow-lg shadow-emerald-900/40 transition duration-200 cursor-pointer">
+          Iniciar Sessão
+        </button>
+      </form>
+
+      <!-- SIGNUP FORM -->
+      <form id="form-signup" onsubmit="handleSignup(event)" class="space-y-4 hidden">
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nome Completo</label>
+          <input type="text" id="signup-name" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="Maria Silva">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Email</label>
+          <input type="email" id="signup-email" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="exemplo@email.com">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Palavra-passe</label>
+          <input type="password" id="signup-password" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Código de Convite da Casa (Opcional)</label>
+          <input type="text" id="signup-house-code" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 text-sm uppercase tracking-wider" placeholder="Ex: CASA-8F92A1">
+          <span class="text-[11px] text-slate-500 mt-1 block">Deixe em branco para criar uma casa nova exclusiva.</span>
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-white rounded-xl shadow-lg shadow-emerald-900/40 transition duration-200 cursor-pointer">
+          Registar e Criar Casa
+        </button>
+      </form>
+
+      <div class="mt-6 pt-4 border-t border-slate-800/80 text-center">
+        <button onclick="closeAuthModalGuest()" class="text-xs text-slate-500 hover:text-slate-300 transition underline">
+          Continuar em Modo Demonstrativo / Offline (LocalStorage)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BARCODE SCANNER CAMERA MODAL -->
+  <div id="scanner-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto hidden">
+    <div class="glass-card w-full max-w-lg rounded-3xl p-6 border border-slate-800 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fas fa-barcode text-emerald-400"></i> Digitalizar Código de Barras
+        </h3>
+        <button onclick="stopBarcodeScanner()" class="text-slate-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div id="barcode-scanner-viewport" class="w-full bg-slate-900 rounded-2xl overflow-hidden min-h-[260px] border border-slate-800 relative flex items-center justify-center">
+        <p class="text-slate-500 text-xs text-center p-4">A inicializar a câmara do dispositivo...</p>
+      </div>
+
+      <p class="text-xs text-slate-400 text-center mt-4">Aponte a câmara para o código de barras do produto para o preencher automaticamente.</p>
+      
+      <button onclick="stopBarcodeScanner()" class="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-sm transition">
+        Cancelar Digitalização
+      </button>
+    </div>
+  </div>
+
+  <!-- PRODUCT ADD/EDIT MODAL -->
+  <div id="product-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto hidden">
+    <div class="glass-card w-full max-w-2xl rounded-3xl p-6 border border-slate-800 shadow-2xl relative my-8">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
+        <h3 id="modal-product-title" class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-box text-emerald-400"></i> Adicionar Novo Produto
+        </h3>
+        <button onclick="closeProductModal()" class="text-slate-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <form id="form-product" onsubmit="handleSaveProduct(event)" class="space-y-4">
+        <input type="hidden" id="prod-id">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nome do Produto *</label>
+            <input type="text" id="prod-name" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="Ex: Arroz Agulha 1kg">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Categoria *</label>
+            <select id="prod-category" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+              <option value="Alimentação">Alimentação</option>
+              <option value="Limpeza doméstica">Limpeza doméstica</option>
+              <option value="Higiene pessoal">Higiene pessoal</option>
+              <option value="Outros bens essenciais">Outros bens essenciais</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Localização *</label>
+            <select id="prod-location" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+              <option value="Despensa">Despensa</option>
+              <option value="Frigorífico">Frigorífico</option>
+              <option value="Congelador">Congelador</option>
+              <option value="Casa de Banho">Casa de Banho</option>
+              <option value="Lavandaria">Lavandaria</option>
+              <option value="Garagem / Arrecadação">Garagem / Arrecadação</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Stock Atual *</label>
+            <input type="number" step="0.1" id="prod-qty" required min="0" value="1" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Unidade de Medida *</label>
+            <select id="prod-unit" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+              <option value="pacotes">pacotes</option>
+              <option value="unidades">unidades</option>
+              <option value="embalagens">embalagens</option>
+              <option value="garrafas">garrafas</option>
+              <option value="latas">latas</option>
+              <option value="caixas">caixas</option>
+              <option value="kg">kg</option>
+              <option value="litros">litros</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Stock Mínimo (Alerta) *</label>
+            <input type="number" step="0.1" id="prod-min-qty" required min="0" value="2" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Stock Ideal (Objetivo)</label>
+            <input type="number" step="0.1" id="prod-ideal-qty" min="0" value="5" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Preço Estimado (€)</label>
+            <input type="number" step="0.01" id="prod-price" min="0" value="1.25" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Loja Habitual</label>
+            <input type="text" id="prod-store" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="Ex: Continente, Lidl, Pingo Doce">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Data de Validade (Opcional)</label>
+            <input type="date" id="prod-expiry" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Código de Barras</label>
+            <div class="flex gap-2">
+              <input type="text" id="prod-barcode" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 text-sm" placeholder="Digitalizar ou introduzir">
+              <button type="button" onclick="startBarcodeScanner()" class="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 rounded-xl flex items-center gap-1 text-xs font-bold transition whitespace-nowrap">
+                <i class="fas fa-camera"></i> Ler
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex justify-end gap-3">
+          <button type="button" onclick="closeProductModal()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition">Cancelar</button>
+          <button type="submit" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-900/30 transition">Guardar Produto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CUSTOM ITEM SHOPPING MODAL -->
+  <div id="custom-item-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto hidden">
+    <div class="glass-card w-full max-w-md rounded-3xl p-6 border border-slate-800 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fas fa-plus-circle text-emerald-400"></i> Adicionar Artigo Extra à Lista
+        </h3>
+        <button onclick="closeCustomShoppingModal()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form onsubmit="handleSaveCustomShoppingItem(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Descrição do Artigo *</label>
+          <input type="text" id="custom-item-name" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none" placeholder="Ex: Guardanapos de Papel">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Quantidade *</label>
+            <input type="number" id="custom-item-qty" min="1" value="1" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Preço Est. (€)</label>
+            <input type="number" step="0.01" id="custom-item-price" value="1.00" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Supermercado / Loja</label>
+          <input type="text" id="custom-item-store" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none" placeholder="Ex: Lidl">
+        </div>
+        <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm transition mt-2">
+          Adicionar à Lista de Compras
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN APP STRUCTURE -->
+  <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+    <!-- DESKTOP SIDEBAR NAVIGATION -->
+    <aside class="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800/80 p-4 justify-between select-none">
+      <div class="space-y-6">
+        <!-- Logo Branding -->
+        <div class="flex items-center gap-3 px-2">
+          <div class="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400 text-xl font-black">
+            <i class="fas fa-boxes-stacked"></i>
+          </div>
+          <div>
+            <h1 class="font-black text-lg text-white tracking-tight leading-tight">CasaStock</h1>
+            <p id="house-name-display" class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">A Minha Casa</p>
+          </div>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="space-y-1">
+          <button onclick="nav('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-chart-pie w-5 text-center"></i> Painel Principal</span>
+          </button>
+
+          <button onclick="nav('inventory')" id="nav-inventory" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-boxes-bulk w-5 text-center"></i> Inventário Stock</span>
+            <span id="badge-inventory-count" class="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+          </button>
+
+          <button onclick="nav('shopping')" id="nav-shopping" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-shopping-cart w-5 text-center text-emerald-400"></i> Lista de Compras</span>
+            <span id="badge-shopping-count" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-2 py-0.5 rounded-full font-extrabold">0</span>
+          </button>
+
+          <button onclick="nav('expiry')" id="nav-expiry" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-calendar-xmark w-5 text-center text-amber-400"></i> Validades & Lotes</span>
+            <span id="badge-expiry-count" class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+          </button>
+
+          <button onclick="nav('history')" id="nav-history" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-clock-rotate-left w-5 text-center"></i> Histórico Movimentos</span>
+          </button>
+
+          <button onclick="nav('budget')" id="nav-budget" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-wallet w-5 text-center"></i> Despesas & Orçamento</span>
+          </button>
+
+          <button onclick="nav('settings')" id="nav-settings" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition text-slate-400 hover:bg-slate-800 hover:text-white">
+            <span class="flex items-center gap-3"><i class="fas fa-sliders w-5 text-center"></i> Definições & Nuvem</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Quick Add Product Button -->
+      <div class="space-y-3 pt-4 border-t border-slate-800">
+        <button onclick="openProductModal()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 text-sm transition">
+          <i class="fas fa-plus"></i> Novo Produto
+        </button>
+        <div id="user-status-card" class="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/80 flex items-center justify-between text-xs">
+          <span id="current-user-display" class="text-slate-400 truncate max-w-[120px]">Modo Local</span>
+          <button onclick="openAuthModal()" class="text-emerald-400 hover:text-emerald-300 font-bold">Entrar</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
+
+      <!-- TOP MOBILE HEADER -->
+      <header class="flex md:hidden items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-400 font-bold">
+            <i class="fas fa-boxes-stacked"></i>
+          </div>
+          <div>
+            <h1 class="font-black text-base text-white">CasaStock</h1>
+            <p id="house-name-display-mobile" class="text-[10px] text-emerald-400 uppercase font-bold">A Minha Casa</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openProductModal()" class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg flex items-center gap-1.5">
+            <i class="fas fa-plus"></i> Produto
+          </button>
+          <button onclick="openAuthModal()" class="p-2 bg-slate-800 text-slate-300 rounded-lg text-xs">
+            <i class="fas fa-user"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- SECTION: DASHBOARD -->
+      <section id="sec-dashboard" class="space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-2xl font-black text-white">Resumo do Stock Doméstico</h2>
+            <p class="text-slate-400 text-sm">Visão geral do inventário, necessidades e validades em tempo real.</p>
+          </div>
+          <button onclick="nav('shopping')" class="self-start sm:self-auto px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 font-bold text-xs rounded-xl flex items-center gap-2 transition">
+            <i class="fas fa-cart-shopping"></i> Ver Lista de Compras
+          </button>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div class="glass-card rounded-2xl p-4 border border-slate-800">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider">Total Produtos</span>
+              <i class="fas fa-boxes-bulk text-slate-500"></i>
+            </div>
+            <div id="dash-kpi-total" class="text-2xl sm:text-3xl font-black text-white">0</div>
+            <span class="text-[11px] text-slate-500 mt-1 block">Artigos registados</span>
+          </div>
+
+          <div class="glass-card rounded-2xl p-4 border border-slate-800">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider">Stock Baixo</span>
+              <i class="fas fa-triangle-exclamation text-amber-400"></i>
+            </div>
+            <div id="dash-kpi-low" class="text-2xl sm:text-3xl font-black text-amber-400">0</div>
+            <span class="text-[11px] text-slate-500 mt-1 block">Abaixo do mínimo</span>
+          </div>
+
+          <div class="glass-card rounded-2xl p-4 border border-slate-800">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider">Esgotados</span>
+              <i class="fas fa-circle-xmark text-red-400"></i>
+            </div>
+            <div id="dash-kpi-out" class="text-2xl sm:text-3xl font-black text-red-400">0</div>
+            <span class="text-[11px] text-slate-500 mt-1 block">Necessitam reposição urgente</span>
+          </div>
+
+          <div class="glass-card rounded-2xl p-4 border border-slate-800">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider">Validade Próxima</span>
+              <i class="fas fa-clock text-amber-400"></i>
+            </div>
+            <div id="dash-kpi-expiry" class="text-2xl sm:text-3xl font-black text-amber-400">0</div>
+            <span class="text-[11px] text-slate-500 mt-1 block">Expiram nos próximos 30 dias</span>
+          </div>
+        </div>
+
+        <!-- Dashboard Urgent Items & Chart Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Urgent Replenishment Widget -->
+          <div class="glass-card rounded-2xl p-5 border border-slate-800 lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="font-bold text-white text-base flex items-center gap-2">
+                <i class="fas fa-bell text-red-400"></i> Reposições Prioritárias
+              </h3>
+              <span class="text-xs text-slate-400">Cálculo automático</span>
+            </div>
+            <div id="dash-urgent-list" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+              <!-- JS Injected -->
+            </div>
+          </div>
+
+          <!-- Category Breakdown Chart -->
+          <div class="glass-card rounded-2xl p-5 border border-slate-800 flex flex-col justify-between">
+            <div class="pb-2">
+              <h3 class="font-bold text-white text-base flex items-center gap-2 mb-1">
+                <i class="fas fa-chart-pie text-emerald-400"></i> Categorias
+              </h3>
+              <p class="text-xs text-slate-400">Distribuição dos produtos em casa</p>
+            </div>
+            <div class="relative h-48 my-auto">
+              <canvas id="chart-categories"></canvas>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION: INVENTORY MANAGEMENT -->
+      <section id="sec-inventory" class="space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-black text-white">Inventário de Produtos</h2>
+            <p class="text-slate-400 text-sm">Controlo total de quantidades, localizações e stocks mínimos.</p>
+          </div>
+          <button onclick="openProductModal()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm transition flex items-center gap-2 self-start sm:self-auto shadow-lg shadow-emerald-950/40">
+            <i class="fas fa-plus"></i> Adicionar Produto
+          </button>
+        </div>
+
+        <!-- Filters Toolbar -->
+        <div class="glass-card rounded-2xl p-4 border border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <input type="text" id="filter-search" oninput="renderInventory()" placeholder="Pesquisar por nome, marca ou barcode..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+          </div>
+          <div>
+            <select id="filter-category" onchange="renderInventory()" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+              <option value="">Todas as Categorias</option>
+              <option value="Alimentação">Alimentação</option>
+              <option value="Limpeza doméstica">Limpeza doméstica</option>
+              <option value="Higiene pessoal">Higiene pessoal</option>
+              <option value="Outros bens essenciais">Outros bens essenciais</option>
+            </select>
+          </div>
+          <div>
+            <select id="filter-location" onchange="renderInventory()" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+              <option value="">Todas as Localizações</option>
+              <option value="Despensa">Despensa</option>
+              <option value="Frigorífico">Frigorífico</option>
+              <option value="Congelador">Congelador</option>
+              <option value="Casa de Banho">Casa de Banho</option>
+              <option value="Lavandaria">Lavandaria</option>
+              <option value="Garagem / Arrecadação">Garagem / Arrecadação</option>
+            </select>
+          </div>
+          <div>
+            <select id="filter-status" onchange="renderInventory()" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+              <option value="">Todos os Estados</option>
+              <option value="low">Stock Baixo / Esgotado</option>
+              <option value="ok">Stock Suficiente</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Inventory Table / Cards Grid -->
+        <div id="inventory-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- JS Rendered Cards -->
+        </div>
+      </section>
+
+      <!-- SECTION: SHOPPING LIST (WITH WHATSAPP SHARE BUTTON) -->
+      <section id="sec-shopping" class="space-y-6 hidden">
+        <div class="glass-card rounded-2xl p-5 border border-slate-800 shadow-xl">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-black text-white flex items-center gap-2">
+                <i class="fas fa-shopping-cart text-emerald-400"></i> Lista de Compras Inteligente
+              </h2>
+              <p class="text-slate-400 text-sm mt-0.5">Gerada automaticamente com base nas quantidades mínimas configuradas.</p>
+            </div>
+
+            <!-- ACTION TOOLBAR WITH WHATSAPP BUTTON -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- PROMINENT GREEN WHATSAPP BUTTON -->
+              <button onclick="shareShoppingListWhatsApp()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow-lg shadow-emerald-950/60 transition duration-200 flex items-center gap-2 text-sm cursor-pointer border border-emerald-400/30">
+                <i class="fab fa-whatsapp text-lg"></i> Enviar p/ WhatsApp
+              </button>
+
+              <button onclick="openCustomShoppingModal()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-semibold transition flex items-center gap-2 text-sm border border-slate-700">
+                <i class="fas fa-plus text-emerald-400"></i> Item Extra
+              </button>
+
+              <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-right min-w-[110px]">
+                <span class="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Total Est.</span>
+                <span id="shopping-total" class="text-lg font-black text-emerald-400">0.00 €</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shopping List Items Container -->
+        <div id="shopping-list-container" class="space-y-3">
+          <!-- JS Injected Items -->
+        </div>
+      </section>
+
+      <!-- SECTION: EXPIRY & BATCHES -->
+      <section id="sec-expiry" class="space-y-6 hidden">
+        <div>
+          <h2 class="text-2xl font-black text-white">Gestão de Validades</h2>
+          <p class="text-slate-400 text-sm">Acompanhe e evite o desperdício de artigos perecíveis.</p>
+        </div>
+
+        <div id="expiry-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- JS Rendered Expiry Items -->
+        </div>
+      </section>
+
+      <!-- SECTION: HISTORY -->
+      <section id="sec-history" class="space-y-6 hidden">
+        <div>
+          <h2 class="text-2xl font-black text-white">Histórico de Movimentos de Stock</h2>
+          <p class="text-slate-400 text-sm">Registo das entradas, compras, consumos e descartes.</p>
+        </div>
+
+        <div class="glass-card rounded-2xl border border-slate-800 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-300">
+              <thead class="bg-slate-900/80 text-xs font-bold uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="p-3.5">Data & Hora</th>
+                  <th class="p-3.5">Produto</th>
+                  <th class="p-3.5">Tipo</th>
+                  <th class="p-3.5">Quantidade</th>
+                  <th class="p-3.5">Observação</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body" class="divide-y divide-slate-800/60">
+                <!-- JS Injected -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: BUDGET & EXPENSES -->
+      <section id="sec-budget" class="space-y-6 hidden">
+        <div>
+          <h2 class="text-2xl font-black text-white">Despesas & Orçamento Doméstico</h2>
+          <p class="text-slate-400 text-sm">Controlo de compras realizadas e estimativas mensais.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="glass-card rounded-2xl p-5 border border-slate-800">
+            <span class="text-xs font-bold text-slate-400 uppercase">Orçamento Mensal Definido</span>
+            <div id="budget-limit-display" class="text-3xl font-black text-white mt-2">250.00 €</div>
+            <button onclick="promptChangeBudget()" class="mt-3 text-xs text-emerald-400 hover:underline">Alterar Limite</button>
+          </div>
+
+          <div class="glass-card rounded-2xl p-5 border border-slate-800">
+            <span class="text-xs font-bold text-slate-400 uppercase">Estimativa Lista Atual</span>
+            <div id="budget-current-shopping" class="text-3xl font-black text-emerald-400 mt-2">0.00 €</div>
+            <span class="text-[11px] text-slate-500 mt-1 block">A comprar brevemente</span>
+          </div>
+
+          <div class="glass-card rounded-2xl p-5 border border-slate-800">
+            <span class="text-xs font-bold text-slate-400 uppercase">Total Gasto no Mês</span>
+            <div id="budget-month-spent" class="text-3xl font-black text-slate-200 mt-2">0.00 €</div>
+            <span class="text-[11px] text-slate-500 mt-1 block">Compras confirmadas</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: SETTINGS & SUPABASE CONFIG -->
+      <section id="sec-settings" class="space-y-6 hidden">
+        <div>
+          <h2 class="text-2xl font-black text-white">Definições & Nuvem</h2>
+          <p class="text-slate-400 text-sm">Configure a sua conta, ligação ao Supabase e cópias de segurança.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- House Invite Info -->
+          <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fas fa-house-user text-emerald-400"></i> Agregado Familiar
+            </h3>
+            <p class="text-sm text-slate-400">Partilhe este código com os restantes membros da família para sincronizarem a mesma despensa nos seus telemóveis.</p>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <span class="text-xs text-slate-500 uppercase font-bold block">Código da Sua Casa</span>
+                <span id="settings-house-code" class="text-xl font-mono font-black text-emerald-400 tracking-wider">CASA-DEMO</span>
+              </div>
+              <button onclick="copyHouseCode()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition">
+                <i class="fas fa-copy"></i> Copiar
+              </button>
+            </div>
+          </div>
+
+          <!-- Supabase Config Form -->
+          <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fas fa-cloud text-emerald-400"></i> Configuração Supabase (Nuvem)
+            </h3>
+            <p class="text-sm text-slate-400">Ligue a sua própria instância para ter autenticação de utilizadores e sincronização em tempo real.</p>
+
+            <form onsubmit="handleSaveSupabaseConfig(event)" class="space-y-3">
+              <div>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Project URL</label>
+                <input type="text" id="cfg-supa-url" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none" placeholder="https://xyz.supabase.co">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Anon Public Key</label>
+                <input type="password" id="cfg-supa-key" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none" placeholder="eyJhbGciOi...">
+              </div>
+              <div class="flex gap-2">
+                <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition">
+                  Guardar & Ligar
+                </button>
+                <button type="button" onclick="clearSupabaseConfig()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition">
+                  Desligar
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Backup & Restore -->
+          <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4 md:col-span-2">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fas fa-database text-emerald-400"></i> Gestão de Dados
+            </h3>
+            <div class="flex flex-wrap gap-3">
+              <button onclick="exportDataJSON()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2">
+                <i class="fas fa-download"></i> Exportar Cópia de Segurança (JSON)
+              </button>
+              <button onclick="resetDemoData()" class="px-4 py-2 bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 rounded-xl text-xs font-bold transition flex items-center gap-2">
+                <i class="fas fa-rotate-left"></i> Repor Dados de Exemplo
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MOBILE BOTTOM NAVIGATION BAR -->
+  <nav class="md:hidden bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 px-2 py-2 flex items-center justify-around z-40 select-none">
+    <button onclick="nav('dashboard')" id="mob-nav-dashboard" class="flex flex-col items-center py-1 px-2 text-slate-400 hover:text-white">
+      <i class="fas fa-chart-pie text-base"></i>
+      <span class="text-[10px] font-semibold mt-0.5">Painel</span>
+    </button>
+    <button onclick="nav('inventory')" id="mob-nav-inventory" class="flex flex-col items-center py-1 px-2 text-slate-400 hover:text-white">
+      <i class="fas fa-boxes-bulk text-base"></i>
+      <span class="text-[10px] font-semibold mt-0.5">Stock</span>
+    </button>
+    <button onclick="nav('shopping')" id="mob-nav-shopping" class="flex flex-col items-center py-1 px-2 text-emerald-400 font-bold">
+      <i class="fas fa-shopping-cart text-base"></i>
+      <span class="text-[10px] font-semibold mt-0.5">Compras</span>
+    </button>
+    <button onclick="nav('expiry')" id="mob-nav-expiry" class="flex flex-col items-center py-1 px-2 text-slate-400 hover:text-white">
+      <i class="fas fa-calendar-xmark text-base"></i>
+      <span class="text-[10px] font-semibold mt-0.5">Validades</span>
+    </button>
+    <button onclick="nav('settings')" id="mob-nav-settings" class="flex flex-col items-center py-1 px-2 text-slate-400 hover:text-white">
+      <i class="fas fa-sliders text-base"></i>
+      <span class="text-[10px] font-semibold mt-0.5">Definições</span>
+    </button>
+  </nav>
+
+  <!-- APPLICATION JAVASCRIPT ENGINE -->
+  <script>
+    // INITIAL DEMO DATA FOR IMMEDIATE FUNCTIONALITY
+    const DEFAULT_PRODUCTS = [
+      {
+        id: 'prod-1',
+        name: 'Arroz Agulha 1kg',
+        category: 'Alimentação',
+        location: 'Despensa',
+        quantity: 1,
+        minQuantity: 3,
+        idealQuantity: 5,
+        unit: 'pacotes',
+        estimatedPrice: 1.19,
+        store: 'Continente',
+        expiryDate: '2027-06-30',
+        barcode: '5601234567890'
+      },
+      {
+        id: 'prod-2',
+        name: 'Detergente de Roupa Gel 40L',
+        category: 'Limpeza doméstica',
+        location: 'Lavandaria',
+        quantity: 0,
+        minQuantity: 1,
+        idealQuantity: 2,
+        unit: 'embalagens',
+        estimatedPrice: 14.99,
+        store: 'Lidl',
+        expiryDate: '',
+        barcode: '5609876543210'
+      },
+      {
+        id: 'prod-3',
+        name: 'Leite Meio Gordo 1L',
+        category: 'Alimentação',
+        location: 'Despensa',
+        quantity: 6,
+        minQuantity: 4,
+        idealQuantity: 12,
+        unit: 'embalagens',
+        estimatedPrice: 0.89,
+        store: 'Pingo Doce',
+        expiryDate: '2026-11-15',
+        barcode: '5601112223334'
+      },
+      {
+        id: 'prod-4',
+        name: 'Papel Higiénico (12 rolos)',
+        category: 'Higiene pessoal',
+        location: 'Casa de Banho',
+        quantity: 1,
+        minQuantity: 2,
+        idealQuantity: 4,
+        unit: 'pacotes',
+        estimatedPrice: 3.49,
+        store: 'Continente',
+        expiryDate: '',
+        barcode: ''
+      }
+    ];
+
+    // APPLICATION STATE
+    let state = {
+      products: [],
+      customShoppingItems: [],
+      history: [],
+      budgetLimit: 250.00,
+      currentHouseCode: 'CASA-DEMO',
+      supabaseConfig: { url: '', key: '' },
+      currentUser: null,
+      activeSection: 'dashboard'
+    };
+
+    let supabaseClient = null;
+    let categoryChartInstance = null;
+    let html5QrCode = null;
+
+    // INITIALIZATION
+    window.onload = function() {
+      loadSavedState();
+      initSupabaseIfConfigured();
+      renderAll();
+    };
+
+    function loadSavedState() {
+      const saved = localStorage.getItem('casastock_app_state');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          state.products = parsed.products || DEFAULT_PRODUCTS;
+          state.customShoppingItems = parsed.customShoppingItems || [];
+          state.history = parsed.history || [];
+          state.budgetLimit = parsed.budgetLimit || 250.00;
+          state.currentHouseCode = parsed.currentHouseCode || 'CASA-DEMO';
+          state.supabaseConfig = parsed.supabaseConfig || { url: '', key: '' };
+        } catch(e) {
+          state.products = DEFAULT_PRODUCTS;
+        }
+      } else {
+        state.products = DEFAULT_PRODUCTS;
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem('casastock_app_state', JSON.stringify({
+        products: state.products,
+        customShoppingItems: state.customShoppingItems,
+        history: state.history,
+        budgetLimit: state.budgetLimit,
+        currentHouseCode: state.currentHouseCode,
+        supabaseConfig: state.supabaseConfig
+      }));
+    }
+
+    // NAVIGATION
+    function nav(sectionId) {
+      state.activeSection = sectionId;
+      document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+      const activeSec = document.getElementById(`sec-${sectionId}`);
+      if (activeSec) activeSec.classList.remove('hidden');
+
+      // Update Nav Buttons
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white');
+        btn.classList.add('text-slate-400');
+      });
+      const activeBtn = document.getElementById(`nav-${sectionId}`);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-slate-800', 'text-white');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      renderAll();
+    }
+
+    // RENDER ALL MODULES
+    function renderAll() {
+      updateBadges();
+      renderDashboard();
+      renderInventory();
+      renderShoppingList();
+      renderExpiry();
+      renderHistory();
+      renderBudget();
+      
+      const houseDisplay = document.getElementById('house-code-display');
+      if (houseDisplay) houseDisplay.innerText = state.currentHouseCode;
+
+      const houseSettings = document.getElementById('settings-house-code');
+      if (houseSettings) houseSettings.innerText = state.currentHouseCode;
+    }
+
+    function updateBadges() {
+      const totalProds = state.products.length;
+      const neededProds = state.products.filter(p => p.quantity <= p.minQuantity).length + state.customShoppingItems.length;
+      
+      const now = new Date();
+      const in30Days = new Date();
+      in30Days.setDate(now.getDate() + 30);
+      const expiringCount = state.products.filter(p => p.expiryDate && new Date(p.expiryDate) <= in30Days).length;
+
+      document.getElementById('badge-inventory-count').innerText = totalProds;
+      document.getElementById('badge-shopping-count').innerText = neededProds;
+      document.getElementById('badge-expiry-count').innerText = expiringCount;
+    }
+
+    // DASHBOARD ENGINE
+    function renderDashboard() {
+      const total = state.products.length;
+      const low = state.products.filter(p => p.quantity > 0 && p.quantity <= p.minQuantity).length;
+      const out = state.products.filter(p => p.quantity === 0).length;
+
+      const now = new Date();
+      const in30Days = new Date();
+      in30Days.setDate(now.getDate() + 30);
+      const expiring = state.products.filter(p => p.expiryDate && new Date(p.expiryDate) <= in30Days).length;
+
+      document.getElementById('dash-kpi-total').innerText = total;
+      document.getElementById('dash-kpi-low').innerText = low;
+      document.getElementById('dash-kpi-out').innerText = out;
+      document.getElementById('dash-kpi-expiry').innerText = expiring;
+
+      // Urgent Replenishment Widget
+      const urgentContainer = document.getElementById('dash-urgent-list');
+      const urgentProducts = state.products.filter(p => p.quantity <= p.minQuantity);
+
+      if (urgentProducts.length === 0) {
+        urgentContainer.innerHTML = `
+          <div class="text-center py-6 text-slate-500 text-xs">
+            <i class="fas fa-circle-check text-emerald-500 text-2xl mb-1 block"></i>
+            Todos os níveis de stock estão dentro do mínimo definido.
+          </div>
+        `;
+      } else {
+        urgentContainer.innerHTML = urgentProducts.map(p => {
+          const qtyNeeded = Math.max(1, (p.idealQuantity || (p.minQuantity * 2)) - p.quantity);
+          const isOut = p.quantity === 0;
+          return `
+            <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="w-2 h-2 rounded-full ${isOut ? 'bg-red-500' : 'bg-amber-400'}"></span>
+                <div>
+                  <h4 class="font-bold text-white text-xs">${p.name}</h4>
+                  <span class="text-[11px] text-slate-400">Atual: <strong class="${isOut ? 'text-red-400' : 'text-amber-400'}">${p.quantity} ${p.unit}</strong> | Mínimo: ${p.minQuantity}</span>
+                </div>
+              </div>
+              <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                Comprar +${qtyNeeded}
+              </span>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Render Doughnut Chart
+      renderCategoryChart();
+    }
+
+    function renderCategoryChart() {
+      const ctx = document.getElementById('chart-categories');
+      if (!ctx) return;
+
+      const counts = {};
+      state.products.forEach(p => {
+        counts[p.category] = (counts[p.category] || 0) + 1;
+      });
+
+      const labels = Object.keys(counts);
+      const data = Object.values(counts);
+
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+      }
+
+      categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels.length ? labels : ['Sem produtos'],
+          datasets: [{
+            data: data.length ? data : [1],
+            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#94a3b8', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    // INVENTORY MODULE
+    function renderInventory() {
+      const container = document.getElementById('inventory-grid');
+      const search = document.getElementById('filter-search')?.value.toLowerCase() || '';
+      const cat = document.getElementById('filter-category')?.value || '';
+      const loc = document.getElementById('filter-location')?.value || '';
+      const status = document.getElementById('filter-status')?.value || '';
+
+      const filtered = state.products.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(search) || (p.barcode && p.barcode.includes(search));
+        const matchesCat = !cat || p.category === cat;
+        const matchesLoc = !loc || p.location === loc;
+        const matchesStatus = !status || (status === 'low' ? p.quantity <= p.minQuantity : p.quantity > p.minQuantity);
+        return matchesSearch && matchesCat && matchesLoc && matchesStatus;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-500">
+            <i class="fas fa-box-open text-4xl mb-2 block text-slate-600"></i>
+            Nenhum produto encontrado com os filtros selecionados.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(p => {
+        let statusBadge = '';
+        if (p.quantity === 0) {
+          statusBadge = `<span class="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Esgotado</span>`;
+        } else if (p.quantity <= p.minQuantity) {
+          statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Stock Baixo</span>`;
+        } else {
+          statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Suficiente</span>`;
+        }
+
+        return `
+          <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between">
+            <div>
+              <div class="flex items-start justify-between gap-2 mb-2">
+                <div>
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">${p.category}</span>
+                  <h3 class="font-bold text-white text-base leading-snug">${p.name}</h3>
+                </div>
+                ${statusBadge}
+              </div>
+              <div class="text-xs text-slate-400 space-y-1 mb-4">
+                <div><i class="fas fa-location-dot w-4 text-emerald-400"></i> ${p.location}</div>
+                <div><i class="fas fa-store w-4 text-slate-500"></i> ${p.store || 'Loja não def.'}</div>
+                ${p.expiryDate ? `<div><i class="fas fa-calendar w-4 text-amber-400"></i> Validade: ${p.expiryDate}</div>` : ''}
+                ${p.barcode ? `<div><i class="fas fa-barcode w-4 text-slate-500"></i> ${p.barcode}</div>` : ''}
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] text-slate-500 block uppercase font-semibold">Stock Atual</span>
+                <span class="text-lg font-black text-white">${p.quantity} <span class="text-xs font-normal text-slate-400">${p.unit}</span></span>
+              </div>
+
+              <!-- Quick Increment / Decrement -->
+              <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                <button onclick="adjustQty('${p.id}', -1)" class="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold flex items-center justify-center text-xs">
+                  <i class="fas fa-minus"></i>
+                </button>
+                <button onclick="adjustQty('${p.id}', 1)" class="w-7 h-7 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center justify-center text-xs">
+                  <i class="fas fa-plus"></i>
+                </button>
+                <button onclick="openEditProduct('${p.id}')" class="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg flex items-center justify-center text-xs ml-1">
+                  <i class="fas fa-pen"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function adjustQty(productId, delta) {
+      const prod = state.products.find(p => p.id === productId);
+      if (!prod) return;
+
+      const newQty = Math.max(0, prod.quantity + delta);
+      const diff = newQty - prod.quantity;
+      prod.quantity = newQty;
+
+      if (diff !== 0) {
+        state.history.unshift({
+          id: 'hist-' + Date.now(),
+          productName: prod.name,
+          type: diff > 0 ? 'Entrada' : 'Consumo',
+          quantity: Math.abs(diff),
+          unit: prod.unit,
+          date: new Date().toLocaleString('pt-PT'),
+          note: diff > 0 ? 'Ajuste manual de stock (+)' : 'Ajuste manual de stock (-)'
+        });
+      }
+
+      saveData();
+      renderAll();
+    }
+
+    // BARCODE SCANNER ENGINE
+    function startBarcodeScanner() {
+      document.getElementById('scanner-modal').classList.remove('hidden');
+      
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("barcode-scanner-viewport");
+      }
+
+      const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          document.getElementById('prod-barcode').value = decodedText;
+          showToast(`Código detetado: ${decodedText}`, 'success');
+          stopBarcodeScanner();
+        },
+        (errorMessage) => {
+          // Scanner looking for code - silent ignore
+        }
+      ).catch((err) => {
+        showToast('Não foi possível aceder à câmara. Permita o acesso nas definições.', 'error');
+        stopBarcodeScanner();
+      });
+    }
+
+    function stopBarcodeScanner() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          document.getElementById('scanner-modal').classList.add('hidden');
+        }).catch(() => {
+          document.getElementById('scanner-modal').classList.add('hidden');
+        });
+      } else {
+        document.getElementById('scanner-modal').classList.add('hidden');
+      }
+    }
+
+    // SMART SHOPPING LIST & WHATSAPP EXPORT ENGINE
+    function renderShoppingList() {
+      const container = document.getElementById('shopping-list-container');
+      const totalEl = document.getElementById('shopping-total');
+
+      const neededProducts = state.products.filter(p => p.quantity <= p.minQuantity);
+      const customItems = state.customShoppingItems;
+
+      if (neededProducts.length === 0 && customItems.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card rounded-2xl p-12 text-center border border-slate-800">
+            <i class="fas fa-circle-check text-5xl text-emerald-500/30 mb-3 block"></i>
+            <h3 class="text-lg font-bold text-slate-300">A sua despensa está bem abastecida!</h3>
+            <p class="text-slate-500 text-sm mt-1">Nenhum produto necessita de reposição no momento.</p>
+          </div>
+        `;
+        totalEl.innerText = '0.00 €';
+        return;
+      }
+
+      let totalCost = 0;
+      let html = '';
+
+      // Inventory replenishment items
+      neededProducts.forEach(p => {
+        const qtyToBuy = Math.max(1, (p.idealQuantity || (p.minQuantity * 2)) - p.quantity);
+        const estCost = qtyToBuy * (p.estimatedPrice || 0);
+        totalCost += estCost;
+
+        html += `
+          <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-slate-700 transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-0.5">
+                <span>${p.category}</span>
+                <span>•</span>
+                <span class="text-emerald-400">${p.store || 'Supermercado'}</span>
+              </div>
+              <h4 class="font-bold text-white text-base">${p.name}</h4>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Comprar recomendado: <strong class="text-amber-400">${qtyToBuy} ${p.unit}</strong>
+                <span class="text-slate-500">(Stock Atual: ${p.quantity})</span>
+              </p>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 border-slate-800 pt-3 sm:pt-0">
+              <div class="text-right">
+                <span class="text-[10px] text-slate-500 block uppercase font-bold">Est. Total</span>
+                <span class="text-sm font-black text-emerald-400">${estCost.toFixed(2)} €</span>
+              </div>
+              <button onclick="confirmPurchase('${p.id}', ${qtyToBuy})" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition">
+                <i class="fas fa-check"></i> Comprado
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      // Custom Shopping Items
+      customItems.forEach((ci, idx) => {
+        const estCost = ci.quantity * (ci.price || 0);
+        totalCost += estCost;
+
+        html += `
+          <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-slate-700 transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/40">
+            <div>
+              <div class="flex items-center gap-2 text-[11px] text-amber-400 font-semibold uppercase tracking-wider mb-0.5">
+                <span>Artigo Extra</span>
+                <span>•</span>
+                <span>${ci.store || 'Loja'}</span>
+              </div>
+              <h4 class="font-bold text-white text-base">${ci.name}</h4>
+              <p class="text-xs text-slate-400 mt-0.5">Comprar: <strong class="text-white">${ci.quantity} unid</strong></p>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 border-slate-800 pt-3 sm:pt-0">
+              <div class="text-right">
+                <span class="text-[10px] text-slate-500 block uppercase font-bold">Est. Total</span>
+                <span class="text-sm font-black text-emerald-400">${estCost.toFixed(2)} €</span>
+              </div>
+              <button onclick="confirmCustomPurchase(${idx})" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition">
+                <i class="fas fa-check"></i> Comprado
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      totalEl.innerText = `${totalCost.toFixed(2)} €`;
+    }
+
+    // WHATSAPP SHARE GENERATOR
+    function shareShoppingListWhatsApp() {
+      const neededProducts = state.products.filter(p => p.quantity <= p.minQuantity);
+      const customItems = state.customShoppingItems;
+
+      if (neededProducts.length === 0 && customItems.length === 0) {
+        showToast('A lista de compras está vazia!', 'info');
+        return;
+      }
+
+      const today = new Date().toLocaleDateString('pt-PT');
+      let msg = `🛒 *CASA STOCK - LISTA DE COMPRAS*\n📅 *Data:* ${today}\n🏠 *Agregado:* ${state.currentHouseCode}\n\n`;
+
+      // Group by Store
+      const stores = {};
+
+      neededProducts.forEach(p => {
+        const store = p.store || 'Supermercado Geral';
+        if (!stores[store]) stores[store] = [];
+        const qtyToBuy = Math.max(1, (p.idealQuantity || (p.minQuantity * 2)) - p.quantity);
+        stores[store].push(`[ ] *${p.name}* — ${qtyToBuy} ${p.unit} _(~${((p.estimatedPrice || 0) * qtyToBuy).toFixed(2)}€)_`);
+      });
+
+      customItems.forEach(ci => {
+        const store = ci.store || 'Outras Lojas';
+        if (!stores[store]) stores[store] = [];
+        stores[store].push(`[ ] *${ci.name}* — ${ci.quantity} unid _(~${((ci.price || 0) * ci.quantity).toFixed(2)}€)_`);
+      });
+
+      let grandTotal = 0;
+      neededProducts.forEach(p => {
+        const qty = Math.max(1, (p.idealQuantity || (p.minQuantity * 2)) - p.quantity);
+        grandTotal += qty * (p.estimatedPrice || 0);
+      });
+      customItems.forEach(ci => { grandTotal += ci.quantity * (ci.price || 0); });
+
+      for (const [store, items] of Object.entries(stores)) {
+        msg += `🏬 *${store.toUpperCase()}*\n`;
+        items.forEach(item => msg += `${item}\n`);
+        msg += `\n`;
+      }
+
+      if (grandTotal > 0) {
+        msg += `💰 *Custo Total Estimado:* ~ ${grandTotal.toFixed(2)} €\n\n`;
+      }
+
+      msg += `_Enviado via CasaStock Web App_`;
+
+      const encoded = encodeURIComponent(msg);
+      window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    }
+
+    function confirmPurchase(productId, qtyBought) {
+      const prod = state.products.find(p => p.id === productId);
+      if (!prod) return;
+
+      prod.quantity += qtyBought;
+
+      state.history.unshift({
+        id: 'hist-' + Date.now(),
+        productName: prod.name,
+        type: 'Compra',
+        quantity: qtyBought,
+        unit: prod.unit,
+        date: new Date().toLocaleString('pt-PT'),
+        note: 'Compra confirmada via Lista de Compras'
+      });
+
+      saveData();
+      renderAll();
+      showToast(`Adicionado ${qtyBought} ${prod.unit} de ${prod.name} ao stock!`, 'success');
+    }
+
+    function confirmCustomPurchase(index) {
+      const item = state.customShoppingItems[index];
+      if (!item) return;
+
+      state.customShoppingItems.splice(index, 1);
+
+      state.history.unshift({
+        id: 'hist-' + Date.now(),
+        productName: item.name,
+        type: 'Compra Extra',
+        quantity: item.quantity,
+        unit: 'unid',
+        date: new Date().toLocaleString('pt-PT'),
+        note: 'Compra de artigo extra confirmada'
+      });
+
+      saveData();
+      renderAll();
+      showToast(`Artigo "${item.name}" marcado como comprado!`, 'success');
+    }
+
+    // EXPIRY MODULE
+    function renderExpiry() {
+      const container = document.getElementById('expiry-list-container');
+      const expiringProds = state.products.filter(p => p.expiryDate).sort((a,b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+
+      if (expiringProds.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-500 glass-card rounded-2xl border border-slate-800">
+            <i class="fas fa-calendar-check text-4xl mb-2 block text-emerald-500/40"></i>
+            Nenhum produto com data de validade registada.
+          </div>
+        `;
+        return;
+      }
+
+      const today = new Date();
+
+      container.innerHTML = expiringProds.map(p => {
+        const exp = new Date(p.expiryDate);
+        const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+        let badge = '';
+        if (diffDays < 0) {
+          badge = `<span class="bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-2.5 py-1 rounded-full font-bold">Expirado (${Math.abs(diffDays)} dias)</span>`;
+        } else if (diffDays <= 7) {
+          badge = `<span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-2.5 py-1 rounded-full font-bold">Expira em ${diffDays} dias</span>`;
+        } else {
+          badge = `<span class="bg-slate-800 text-slate-300 text-xs px-2.5 py-1 rounded-full font-semibold">Validade: ${p.expiryDate}</span>`;
+        }
+
+        return `
+          <div class="glass-card rounded-2xl p-4 border border-slate-800 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-bold text-slate-400 uppercase">${p.category}</span>
+                ${badge}
+              </div>
+              <h4 class="font-bold text-white text-base">${p.name}</h4>
+              <p class="text-xs text-slate-400 mt-1"><i class="fas fa-location-dot text-emerald-400"></i> ${p.location} — ${p.quantity} ${p.unit}</p>
+            </div>
+            <div class="pt-3 border-t border-slate-800 mt-3 flex justify-end">
+              <button onclick="adjustQty('${p.id}', -1)" class="text-xs bg-red-900/40 hover:bg-red-900/60 text-red-300 px-3 py-1.5 rounded-lg border border-red-800/50 transition font-bold">
+                Registar Consumo / Descarte
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // HISTORY MODULE
+    function renderHistory() {
+      const tbody = document.getElementById('history-table-body');
+      if (state.history.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Nenhum movimento registado.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = state.history.slice(0, 30).map(h => `
+        <tr class="hover:bg-slate-900/50 transition">
+          <td class="p-3.5 text-xs text-slate-400">${h.date}</td>
+          <td class="p-3.5 font-bold text-white">${h.productName}</td>
+          <td class="p-3.5">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${h.type.includes('Compra') || h.type === 'Entrada' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
+              ${h.type}
+            </span>
+          </td>
+          <td class="p-3.5 font-bold text-slate-200">${h.quantity} ${h.unit || ''}</td>
+          <td class="p-3.5 text-xs text-slate-400">${h.note || '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    // BUDGET MODULE
+    function renderBudget() {
+      document.getElementById('budget-limit-display').innerText = `${state.budgetLimit.toFixed(2)} €`;
+
+      let shoppingEst = 0;
+      state.products.filter(p => p.quantity <= p.minQuantity).forEach(p => {
+        const qty = Math.max(1, (p.idealQuantity || (p.minQuantity * 2)) - p.quantity);
+        shoppingEst += qty * (p.estimatedPrice || 0);
+      });
+      state.customShoppingItems.forEach(ci => shoppingEst += ci.quantity * (ci.price || 0));
+
+      document.getElementById('budget-current-shopping').innerText = `${shoppingEst.toFixed(2)} €`;
+    }
+
+    function promptChangeBudget() {
+      const newB = prompt('Introduza o novo limite de orçamento mensal (€):', state.budgetLimit);
+      if (newB && !isNaN(newB)) {
+        state.budgetLimit = parseFloat(newB);
+        saveData();
+        renderBudget();
+        showToast('Orçamento atualizado com sucesso!', 'success');
+      }
+    }
+
+    // PRODUCT MODAL HANDLERS
+    function openProductModal() {
+      document.getElementById('modal-product-title').innerHTML = '<i class="fas fa-box text-emerald-400"></i> Adicionar Novo Produto';
+      document.getElementById('form-product').reset();
+      document.getElementById('prod-id').value = '';
+      document.getElementById('product-modal').classList.remove('hidden');
+    }
+
+    function openEditProduct(id) {
+      const p = state.products.find(item => item.id === id);
+      if (!p) return;
+
+      document.getElementById('modal-product-title').innerHTML = '<i class="fas fa-pen text-emerald-400"></i> Editar Produto';
+      document.getElementById('prod-id').value = p.id;
+      document.getElementById('prod-name').value = p.name;
+      document.getElementById('prod-category').value = p.category;
+      document.getElementById('prod-location').value = p.location;
+      document.getElementById('prod-qty').value = p.quantity;
+      document.getElementById('prod-unit').value = p.unit;
+      document.getElementById('prod-min-qty').value = p.minQuantity;
+      document.getElementById('prod-ideal-qty').value = p.idealQuantity || p.minQuantity * 2;
+      document.getElementById('prod-price').value = p.estimatedPrice || 0;
+      document.getElementById('prod-store').value = p.store || '';
+      document.getElementById('prod-expiry').value = p.expiryDate || '';
+      document.getElementById('prod-barcode').value = p.barcode || '';
+
+      document.getElementById('product-modal').classList.remove('hidden');
+    }
+
+    function closeProductModal() {
+      document.getElementById('product-modal').classList.add('hidden');
+    }
+
+    function handleSaveProduct(e) {
+      e.preventDefault();
+      const id = document.getElementById('prod-id').value;
+
+      const productData = {
+        id: id || 'prod-' + Date.now(),
+        name: document.getElementById('prod-name').value,
+        category: document.getElementById('prod-category').value,
+        location: document.getElementById('prod-location').value,
+        quantity: parseFloat(document.getElementById('prod-qty').value) || 0,
+        unit: document.getElementById('prod-unit').value,
+        minQuantity: parseFloat(document.getElementById('prod-min-qty').value) || 1,
+        idealQuantity: parseFloat(document.getElementById('prod-ideal-qty').value) || 3,
+        estimatedPrice: parseFloat(document.getElementById('prod-price').value) || 0,
+        store: document.getElementById('prod-store').value,
+        expiryDate: document.getElementById('prod-expiry').value,
+        barcode: document.getElementById('prod-barcode').value
+      };
+
+      if (id) {
+        const idx = state.products.findIndex(p => p.id === id);
+        if (idx !== -1) state.products[idx] = productData;
+      } else {
+        state.products.push(productData);
+      }
+
+      saveData();
+      closeProductModal();
+      renderAll();
+      showToast('Produto guardado com sucesso!', 'success');
+    }
+
+    // CUSTOM SHOPPING ITEM MODAL
+    function openCustomShoppingModal() {
+      document.getElementById('custom-item-modal').classList.remove('hidden');
+    }
+    function closeCustomShoppingModal() {
+      document.getElementById('custom-item-modal').classList.add('hidden');
+    }
+    function handleSaveCustomShoppingItem(e) {
+      e.preventDefault();
+      state.customShoppingItems.push({
+        name: document.getElementById('custom-item-name').value,
+        quantity: parseInt(document.getElementById('custom-item-qty').value) || 1,
+        price: parseFloat(document.getElementById('custom-item-price').value) || 0,
+        store: document.getElementById('custom-item-store').value
+      });
+      saveData();
+      closeCustomShoppingModal();
+      renderAll();
+      showToast('Artigo extra adicionado à lista!', 'success');
+    }
+
+    // AUTH & SUPABASE ENGINE
+    function openAuthModal() {
+      document.getElementById('auth-modal').classList.remove('hidden');
+    }
+    function closeAuthModalGuest() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+    function switchAuthTab(tab) {
+      if (tab === 'login') {
+        document.getElementById('form-login').classList.remove('hidden');
+        document.getElementById('form-signup').classList.add('hidden');
+        document.getElementById('tab-login-btn').className = 'flex-1 py-2 text-sm font-semibold rounded-lg transition text-white bg-slate-800 shadow';
+        document.getElementById('tab-signup-btn').className = 'flex-1 py-2 text-sm font-semibold rounded-lg transition text-slate-400 hover:text-white';
+      } else {
+        document.getElementById('form-login').classList.add('hidden');
+        document.getElementById('form-signup').classList.remove('hidden');
+        document.getElementById('tab-signup-btn').className = 'flex-1 py-2 text-sm font-semibold rounded-lg transition text-white bg-slate-800 shadow';
+        document.getElementById('tab-login-btn').className = 'flex-1 py-2 text-sm font-semibold rounded-lg transition text-slate-400 hover:text-white';
+      }
+    }
+
+    function initSupabaseIfConfigured() {
+      if (state.supabaseConfig.url && state.supabaseConfig.key) {
+        try {
+          supabaseClient = supabase.createClient(state.supabaseConfig.url, state.supabaseConfig.key);
+          document.getElementById('cfg-supa-url').value = state.supabaseConfig.url;
+          document.getElementById('cfg-supa-key').value = state.supabaseConfig.key;
+        } catch(e) {
+          console.error("Supabase config invalid", e);
+        }
+      }
+    }
+
+    function handleSaveSupabaseConfig(e) {
+      e.preventDefault();
+      state.supabaseConfig.url = document.getElementById('cfg-supa-url').value.trim();
+      state.supabaseConfig.key = document.getElementById('cfg-supa-key').value.trim();
+      saveData();
+      initSupabaseIfConfigured();
+      showToast('Configuração do Supabase guardada!', 'success');
+    }
+
+    function clearSupabaseConfig() {
+      state.supabaseConfig = { url: '', key: '' };
+      supabaseClient = null;
+      saveData();
+      showToast('Supabase desligado. Modo local ativo.', 'info');
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      state.currentUser = { email: email };
+      document.getElementById('current-user-display').innerText = email;
+      closeAuthModalGuest();
+      showToast(`Sessão iniciada como ${email}`, 'success');
+    }
+
+    function handleSignup(e) {
+      e.preventDefault();
+      const email = document.getElementById('signup-email').value;
+      const houseCode = document.getElementById('signup-house-code').value.toUpperCase().trim() || ('CASA-' + Math.random().toString(36).substring(2, 8).toUpperCase());
+      state.currentHouseCode = houseCode;
+      state.currentUser = { email: email };
+      document.getElementById('current-user-display').innerText = email;
+      saveData();
+      renderAll();
+      closeAuthModalGuest();
+      showToast(`Conta criada! Agregado: ${houseCode}`, 'success');
+    }
+
+    function copyHouseCode() {
+      const code = state.currentHouseCode;
+      navigator.clipboard.writeText(code);
+      showToast('Código de convite copiado!', 'info');
+    }
+
+    // UTILS & TOASTS
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let borderCol = 'border-emerald-500';
+      let icon = 'fa-check-circle text-emerald-400';
+      if (type === 'error') { borderCol = 'border-red-500'; icon = 'fa-exclamation-circle text-red-400'; }
+      if (type === 'info') { borderCol = 'border-blue-500'; icon = 'fa-info-circle text-blue-400'; }
+
+      toast.className = `glass-card border-l-4 ${borderCol} p-4 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-semibold text-white pointer-events-auto transition duration-300 transform translate-y-2`;
+      toast.innerHTML = `<i class="fas ${icon} text-lg"></i> <span>${message}</span>`;
+
+      container.appendChild(toast);
+      setTimeout(() => { toast.classList.remove('translate-y-2'); }, 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function exportDataJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `casastock-backup-${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function resetDemoData() {
+      if (confirm('Tem a certeza que deseja repor o inventário com os dados de demonstração?')) {
+        state.products = DEFAULT_PRODUCTS;
+        state.customShoppingItems = [];
+        state.history = [];
+        saveData();
+        renderAll();
+        showToast('Dados de demonstração repostos com sucesso!', 'success');
+      }
+    }
+  </script>
+</body>
+</html>
